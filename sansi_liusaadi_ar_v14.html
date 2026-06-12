@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SANSI LAB · Liu-Saadi UT · V14 · VR + AR + HoloLens</title>
+<style>
+:root{--bg0:#07131f;--line:#2d5574;--text:#eaf6ff;--muted:#8fb7d4;--accent:#ff7a1a;--cyan:#39bdf8;--green:#4ade80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg0);color:var(--text);font-family:Arial,Helvetica,sans-serif;height:100vh;overflow:hidden}
+header{height:52px;padding:8px 14px;background:#04101c;border-bottom:2px solid #0b7fd3;display:flex;align-items:center;justify-content:space-between;gap:10px}
+h1{font-size:16px;margin:0}.badge{color:var(--accent);font-weight:700}
+.small{color:var(--muted);font-size:11px;line-height:1.4}
+main{display:grid;grid-template-columns:330px 1fr;height:calc(100vh - 52px)}
+aside{background:#061827;border-right:1px solid var(--line);padding:12px;overflow:auto}
+label{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
+input,select,button{width:100%;margin-top:4px;padding:7px;border-radius:6px;border:1px solid var(--line);background:#07131f;color:var(--text)}
+input[type=range]{padding:0}
+button{background:#113554;font-weight:700;cursor:pointer}
+button:hover{background:#174c75}
+button.acc{background:#3a2410;border-color:#7a4a1a;color:var(--accent)}
+button.grn{background:#10301c;border-color:#1d4a2c;color:var(--green)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{margin-top:10px;padding:8px;border-left:3px solid var(--accent);background:#081d30;font-size:11.5px;line-height:1.45}
+.stats{margin-top:10px;padding:9px;border:1px solid var(--line);border-radius:8px;background:#081d30;white-space:pre-wrap;font-size:11px;color:var(--muted)}
+.viewwrap{position:relative}
+#view{width:100%;height:100%;display:block}
+.xrbtns{position:absolute;right:12px;bottom:12px;display:flex;gap:8px}
+.xrbtns button{width:auto;padding:10px 22px;font-size:14px;border-radius:10px}
+.hud{position:absolute;left:10px;top:10px;font-size:11px;color:var(--muted);background:rgba(4,16,28,.78);padding:6px 10px;border-radius:6px;border:1px solid var(--line)}
+.hud b{color:var(--text)}
+</style>
+</head>
+<body>
+<header>
+  <h1>SANSI LAB · Liu-Saadi UT <span class="badge">VR/AR V14</span></h1>
+  <div class="small">through-thickness holes · double-click to move a defect · WebXR VR/AR</div>
+</header>
+<main>
+<aside>
+  <label>Load TFD807C/Sovol CSV</label>
+  <input id="file" type="file" accept=".csv,text/csv" />
+
+  <label>Volume source</label>
+  <select id="vmode">
+    <option value="through" selected>Countersunk holes · bore through + cone on top (gate C-scan)</option>
+    <option value="raw">Echo volume · depth-resolved (physics view)</option>
+    <option value="blend">Blend · holes + echoes</option>
+  </select>
+  <div class="two">
+    <div><label>Gate start</label><input id="gA0" type="number" value="466" min="0"></div>
+    <div><label>Gate end</label><input id="gA1" type="number" value="467" min="1"></div>
+  </div>
+
+  <div class="two">
+    <div><label>Probe X mm</label><input id="fpx" type="number" value="18.7" step="0.1"></div>
+    <div><label>Probe Y mm</label><input id="fpy" type="number" value="21.8" step="0.1"></div>
+  </div>
+  <label>Grid resolution mm (clarity)</label><input id="res" type="number" value="0.9" step="0.1" min="0.5">
+  <label>Amplitude window (what glows)</label>
+  <div class="two">
+    <div><label>Low %</label><input id="wlo" type="range" min="0" max="100" value="8"></div>
+    <div><label>High %</label><input id="whi" type="range" min="0" max="100" value="98"></div>
+  </div>
+  <label>Opacity / gain</label><input id="gain" type="range" min="1" max="100" value="35">
+  <label>Depth range (samples, echo mode)</label>
+  <div class="two">
+    <div><input id="z0" type="number" value="120" min="0"></div>
+    <div><input id="z1" type="number" value="602" min="1"></div>
+  </div>
+  <div class="two">
+    <div><label>Quality</label><select id="steps"><option value="128">fast</option><option value="256" selected>good</option><option value="384">high</option></select></div>
+    <div><label>Thickness ×</label><input id="zscale" type="number" value="1" step="0.25" min="0.2"></div>
+  </div>
+  <label>Surface shell drape — feature mode</label>
+  <select id="shell">
+    <option value="maxproj">Max projection (volume)</option>
+    <option value="peak" selected>1 · Gate peak</option>
+    <option value="p2p">2 · Gate p2p</option>
+    <option value="energy">3 · Gate energy</option>
+    <option value="tof">4 · Gate TOF</option>
+    <option value="decay">5 · Ring-down decay dB</option>
+    <option value="off">hidden</option>
+  </select>
+
+  <label style="color:var(--green);font-weight:700">◎ INDICATIONS (move them around)</label>
+  <div class="two">
+    <div><label>Min size mm³</label><input id="minmm3" type="number" value="40" min="1"></div>
+    <div><label>Max count</label><input id="maxblobs" type="number" value="8" min="1" max="20"></div>
+  </div>
+  <div class="two">
+    <button class="grn" onclick="detectBlobs()">◎ Detect + label</button>
+    <button onclick="resetBlobs()">↺ Put back</button>
+  </div>
+  <button onclick="toggleLabels()">ⓘ show / hide IND info labels</button>
+  <div class="stats" id="blobinfo" style="margin-top:6px">no indications detected yet</div>
+  <button class="acc" onclick="rebuild()">⟳ Rebuild volume</button>
+
+  <div class="note">
+    <b>Desktop:</b> left-drag = orbit · <b>right-drag = turn the part around</b> ·
+    wheel = zoom · <b>double-click a hole → MOVE</b> (mouse moves it, wheel spins it,
+    click drops, ↺ puts back).<br>
+    <b>VR / AR:</b> everything starts locked together; grabbing an indication
+    breaks it free, mini menu beside it: ⟳ spin · ⓘ info · ⤓ lock · ↺ home.
+    <b>Right stick spins whatever you carry</b> — an IND or the whole part.
+    Hold an IND, press the other trigger and pull apart = <b>stretch that
+    IND</b>; both triggers on the part = stretch everything. ⟲ RESET PART
+    brings part + every IND home. <b>Left stick walk · ◄► snap turn · ▲▼ zoom
+    · stick-click recenter</b>. ⓘ buttons show IND info when you want it.<br>
+    <b>VR via Quest Link works from desktop Chrome. AR passthrough + bare-hand
+    tracking need the headset's own browser</b> over https (e.g. GitHub Pages) —
+    the 📱 AR button then shows your real room with the part floating in it.
+  </div>
+  <div class="stats" id="stats">No CSV loaded.</div>
+</aside>
+<div class="viewwrap">
+  <canvas id="view"></canvas>
+  <div class="hud" id="hud">load a CSV — gate 466 columns become through-holes you can pick up</div>
+  <div class="xrbtns"><button class="grn" id="btnVR" style="display:none">🥽 Enter VR</button><button class="acc" id="btnAR" style="display:none">📱 AR passthrough</button></div>
+</div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+const E=id=>document.getElementById(id);
+let nP=0,nS=0,px=null,py=null,med=null,clipEst=512;
+let vol=null;
+let scene,camera,renderer,dolly=null,volGroup=null,volMesh=null,shellMesh=null;
+const TURBO=[[0,[24,48,100]],[.10,[30,72,150]],[.22,[20,80,160]],[.34,[53,106,168]],[.44,[0,140,140]],[.56,[0,200,120]],[.68,[244,230,64]],[.80,[255,159,28]],[.92,[230,40,30]],[1,[255,230,220]]];
+function turbo(t){
+  t=Math.max(0,Math.min(1,t));
+  for(let i=0;i<TURBO.length-1;i++){
+    const [a,ca]=TURBO[i],[b,cb]=TURBO[i+1];
+    if(t>=a&&t<=b){const u=(t-a)/(b-a);
+      return [ca[0]+u*(cb[0]-ca[0]),ca[1]+u*(cb[1]-ca[1]),ca[2]+u*(cb[2]-ca[2])];}
+  }
+  return [255,255,255];
+}
+// EXACT palette of the 2D C-scan tool (preview.html) — used for the shell
+// drape so the top of the part looks identical to "3) Probe response C-scan"
+const TURBO2D=[[0,[234,247,255]],[.10,[214,236,255]],[.22,[148,189,229]],[.34,[53,106,168]],[.44,[4,42,130]],[.56,[0,166,118]],[.68,[244,230,64]],[.80,[255,159,28]],[.92,[193,18,31]],[1,[106,4,15]]];
+function turbo2D(t){
+  t=Math.max(0,Math.min(1,t));
+  for(let i=0;i<TURBO2D.length-1;i++){
+    const [a,ca]=TURBO2D[i],[b,cb]=TURBO2D[i+1];
+    if(t>=a&&t<=b){const u=(t-a)/(b-a);
+      return [ca[0]+u*(cb[0]-ca[0]),ca[1]+u*(cb[1]-ca[1]),ca[2]+u*(cb[2]-ca[2])];}
+  }
+  return [255,255,255];
+}
+function parseCSV(text){
+  const lines=text.split('\n').filter(l=>l.trim()&&l[0]!=='#');
+  const hdr=lines[0].split(',').map(s=>s.trim());
+  const sc=hdr.filter(h=>/^sample_\d+$/.test(h)).sort((a,b)=>+a.split('_')[1]-+b.split('_')[1]);
+  const ix=hdr.indexOf('X_mm'),iy=hdr.indexOf('Y_mm'),is0=hdr.indexOf('sample_0');
+  if(ix<0||iy<0||is0<0)throw new Error('need X_mm, Y_mm, sample_0…');
+  nS=sc.length;
+  const fr=[];
+  for(let i=1;i<lines.length;i++){
+    const v=lines[i].split(',');
+    if(v.length<is0+nS)continue;
+    fr.push({x:+v[ix],y:+v[iy],v,is0});
+  }
+  const segs=[];let s0=0;
+  for(let i=1;i<=fr.length;i++){
+    if(i===fr.length||fr[i].x!==fr[i-1].x||fr[i].y!==fr[i-1].y){segs.push([s0,i-1]);s0=i;}
+  }
+  nP=segs.length;
+  px=new Float64Array(nP);py=new Float64Array(nP);med=new Float32Array(nP*nS);
+  clipEst=1;
+  const tmp=[];
+  for(let p=0;p<nP;p++){
+    const [a,b]=segs[p];px[p]=fr[a].x;py[p]=fr[a].y;
+    const n=Math.min(b-a+1,41);
+    for(let s=0;s<nS;s++){
+      tmp.length=0;
+      for(let k=0;k<n;k++){
+        const r=fr[a+Math.floor(k*(b-a+1)/n)];
+        tmp.push(Math.abs(+r.v[r.is0+s]||0));
+      }
+      tmp.sort((x,y)=>x-y);
+      const m=n%2?tmp[(n-1)/2]:(tmp[n/2-1]+tmp[n/2])/2;
+      med[p*nS+s]=m;
+      if(m>clipEst)clipEst=m;
+    }
+  }
+}
+// Gaussian probe-footprint painting of per-dwell values onto the lateral
+// grid — IDENTICAL maths to the 2D tool's response map (sx=wP/3, sy=hP/3,
+// clipped at the footprint half-size), so the VR volume is exactly as clear.
+function paintLat(vals,vx,vy,xmin,ymin,wmm,hmm){
+  const wP=Math.max(.5,+E('fpx').value||18.7), hP=Math.max(.5,+E('fpy').value||21.8);
+  const sx=wP/3,sy=hP/3,hw=wP/2,hh=hP/2;
+  const resX=wmm/vx, resY=hmm/vy;
+  const sum=new Float32Array(vx*vy),wgt=new Float32Array(vx*vy);
+  for(let p=0;p<nP;p++){
+    const ix0=Math.max(0,Math.floor((px[p]-hw-xmin)/resX)),ix1=Math.min(vx-1,Math.ceil((px[p]+hw-xmin)/resX));
+    const iy0=Math.max(0,Math.floor((py[p]-hh-ymin)/resY)),iy1=Math.min(vy-1,Math.ceil((py[p]+hh-ymin)/resY));
+    for(let iy=iy0;iy<=iy1;iy++){
+      const dy=ymin+(iy+0.5)*resY-py[p];
+      if(Math.abs(dy)>hh)continue;
+      const wy=Math.exp(-0.5*(dy/sy)*(dy/sy));
+      for(let ix=ix0;ix<=ix1;ix++){
+        const dx=xmin+(ix+0.5)*resX-px[p];
+        if(Math.abs(dx)>hw)continue;
+        const w=wy*Math.exp(-0.5*(dx/sx)*(dx/sx));
+        sum[iy*vx+ix]+=vals[p]*w;wgt[iy*vx+ix]+=w;
+      }
+    }
+  }
+  const out=new Float32Array(vx*vy);
+  const cov=new Uint8Array(vx*vy);
+  for(let k=0;k<vx*vy;k++){if(wgt[k]>1e-9){out[k]=sum[k]/wgt[k];cov[k]=1;}}
+  // one smoothing pass (like the 2D tool default)
+  const sm=new Float32Array(vx*vy);
+  for(let y=0;y<vy;y++)for(let x=0;x<vx;x++){
+    let s=0,w=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const yy=y+dy,xx=x+dx;
+      if(yy<0||yy>=vy||xx<0||xx>=vx)continue;
+      const kw=(dx===0&&dy===0)?4:(dx===0||dy===0)?2:1;
+      s+=out[yy*vx+xx]*kw;w+=kw;
+    }
+    sm[y*vx+x]=s/w;
+  }
+  return {f:sm,cov};
+}
+function buildVolume(){
+  const z0=Math.max(0,+E('z0').value|0), z1=Math.min(nS,+E('z1').value|0);
+  const nz=Math.max(8,z1-z0);
+  let xmin=1e18,xmax=-1e18,ymin=1e18,ymax=-1e18;
+  for(let p=0;p<nP;p++){
+    if(px[p]<xmin)xmin=px[p];if(px[p]>xmax)xmax=px[p];
+    if(py[p]<ymin)ymin=py[p];if(py[p]>ymax)ymax=py[p];
+  }
+  const res=Math.max(.5,+E('res').value||0.9);
+  const wmm=Math.max(1,xmax-xmin),hmm=Math.max(1,ymax-ymin);
+  const vx=Math.min(200,Math.max(32,Math.round(wmm/res)));
+  const vy=Math.min(200,Math.max(32,Math.round(hmm/res)));
+  const vmode=E('vmode').value;
+  const vz=vmode==='through'?48:Math.min(192,nz);
+  const data=new Uint8Array(vx*vy*vz);
+  if(vmode==='through'){
+    // gate feature per dwell → footprint-painted lateral field →
+    // COUNTERSUNK-HOLE extrusion: the strongest core (red) is the bore and
+    // goes all the way through; the orange ring is the countersink and only
+    // reaches partway down as a cone. Plate body = translucent blue context
+    // (industrial-CT style transfer function).
+    const gA0=Math.max(0,+E('gA0').value|0), gA1=Math.min(nS,Math.max(gA0+1,+E('gA1').value|0));
+    const fv=new Float64Array(nP);
+    for(let p=0;p<nP;p++){
+      const o=p*nS;let mx=0;
+      for(let s=gA0;s<gA1;s++)if(med[o+s]>mx)mx=med[o+s];
+      fv[p]=mx;
+    }
+    const lp=paintLat(fv,vx,vy,xmin,ymin,wmm,hmm);
+    const lat=lp.f,cov=lp.cov;
+    const sv=[];
+    for(let k=0;k<vx*vy;k++)if(cov[k])sv.push(lat[k]);
+    sv.sort((a,b)=>a-b);
+    const q=t=>sv[Math.min(sv.length-1,Math.floor(sv.length*t))];
+    const lo=q(0.5),hi=Math.max(q(0.985),lo+1);
+    const CSK_FRAC=0.38;      // countersink reaches 38% into the thickness
+    const T_CSK=0.42;         // ring level that counts as countersink
+    const T_BORE=0.78;        // core level that goes all the way through
+    const BODY=32;            // translucent blue plate material
+    for(let i=0;i<vx*vy;i++){
+      if(!cov[i]){for(let z=0;z<vz;z++)data[z*vx*vy+i]=0;continue;}
+      const t=Math.max(0,Math.min(1,(lat[i]-lo)/(hi-lo)));
+      for(let z=0;z<vz;z++){
+        const d=(vz-1-z)/(vz-1);                 // 0 at top surface → 1 at bottom
+        const thr=d<CSK_FRAC?T_CSK+(T_BORE-T_CSK)*(d/CSK_FRAC):T_BORE;
+        data[z*vx*vy+i]=t>=thr?Math.round(140+t*115):BODY;
+      }
+    }
+  }else{
+    // echo / blend: footprint-paint EVERY pooled depth slice
+    const colPool=new Float32Array(nP*vz);
+    for(let p=0;p<nP;p++){
+      const o=p*nS;
+      for(let z=0;z<vz;z++){
+        const sA=z0+Math.floor(z/vz*nz), sB=z0+Math.max(sA-z0+1,Math.floor((z+1)/vz*nz));
+        let mx=0;
+        for(let s=sA;s<sB&&s<nS;s++)if(med[o+s]>mx)mx=med[o+s];
+        colPool[p*vz+z]=mx;
+      }
+    }
+    const slice=new Float64Array(nP);
+    for(let z=0;z<vz;z++){
+      for(let p=0;p<nP;p++)slice[p]=colPool[p*vz+z];
+      const lp=paintLat(slice,vx,vy,xmin,ymin,wmm,hmm);
+      for(let i=0;i<vx*vy;i++){
+        if(!lp.cov[i]){data[z*vx*vy+i]=0;continue;}
+        const v=Math.log1p(lp.f[i])/Math.log1p(clipEst);
+        data[z*vx*vy+i]=Math.max(0,Math.min(255,Math.round(v*255)));
+      }
+    }
+    if(vmode==='blend'){
+      const gA0=Math.max(0,+E('gA0').value|0), gA1=Math.min(nS,Math.max(gA0+1,+E('gA1').value|0));
+      const fv=new Float64Array(nP);
+      for(let p=0;p<nP;p++){
+        const o=p*nS;let mx=0;
+        for(let s=gA0;s<gA1;s++)if(med[o+s]>mx)mx=med[o+s];
+        fv[p]=mx;
+      }
+      const lp2=paintLat(fv,vx,vy,xmin,ymin,wmm,hmm);
+      const sv=[];
+      for(let k=0;k<vx*vy;k++)if(lp2.cov[k])sv.push(lp2.f[k]);
+      sv.sort((a,b)=>a-b);
+      const q=t=>sv[Math.min(sv.length-1,Math.floor(sv.length*t))];
+      const lo=q(0.5),hi=Math.max(q(0.985),lo+1);
+      for(let i=0;i<vx*vy;i++){
+        if(!lp2.cov[i])continue;
+        const u=Math.round(Math.max(0,Math.min(1,(lp2.f[i]-lo)/(hi-lo)))*255);
+        for(let z=0;z<vz;z++){
+          const k=z*vx*vy+i;
+          data[k]=Math.max(Math.round(data[k]*0.55),u);
+        }
+      }
+    }
+  }
+  vol={data,vx,vy,vz,wmm,hmm,xmin,ymin,z0,z1};
+  return vol;
+}
+function featAt(p,g0,g1,mode){
+  const o=p*nS;let mx=-1,mi=g0,en=0;
+  for(let k=g0;k<g1&&k<nS;k++){
+    const v=med[o+k];
+    if(v>mx){mx=v;mi=k;}
+    en+=v*v;
+  }
+  if(mode==='decay'){
+    const e0=Math.min(120,Math.max(10,g0-50));let eE=0;
+    for(let k=e0;k<g0&&k<nS;k++){const v=med[o+k];eE+=v*v;}
+    return 10*Math.log10((en+1)/(eE+1));
+  }
+  if(mode==='tof')return mi;
+  if(mode==='energy')return Math.log10(en+1);
+  return mx;
+}
+// ── raymarch shader ─────────────────────────────────────────────────────
+const VERT=`
+varying vec3 vOrigin;
+varying vec3 vDir;
+uniform mat4 uInvModel;
+void main(){
+  vec4 wp = modelMatrix * vec4(position,1.0);
+  vOrigin = (uInvModel * vec4(cameraPosition,1.0)).xyz;
+  vDir    = position - vOrigin;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+const FRAG=`
+precision highp float;
+precision highp sampler3D;
+varying vec3 vOrigin;
+varying vec3 vDir;
+uniform sampler3D uData;
+uniform sampler2D uLut;
+uniform float uLo,uHi,uGain;
+uniform int uSteps;
+vec2 boxHit(vec3 ro, vec3 rd){
+  vec3 inv = 1.0/rd;
+  vec3 t0 = (vec3(-0.5)-ro)*inv;
+  vec3 t1 = (vec3( 0.5)-ro)*inv;
+  vec3 tmin = min(t0,t1), tmax = max(t0,t1);
+  return vec2(max(max(tmin.x,tmin.y),tmin.z), min(min(tmax.x,tmax.y),tmax.z));
+}
+void main(){
+  vec3 rd = normalize(vDir);
+  vec2 hit = boxHit(vOrigin, rd);
+  if(hit.x > hit.y) discard;
+  hit.x = max(hit.x, 0.0);
+  vec4 acc = vec4(0.0);
+  float dt = (hit.y-hit.x)/float(uSteps);
+  vec3 p = vOrigin + rd*(hit.x+dt*0.5);
+  vec3 step_ = rd*dt;
+  for(int i=0;i<512;i++){
+    if(i>=uSteps)break;
+    float v = texture(uData, p+vec3(0.5)).r;
+    float t = clamp((v-uLo)/max(uHi-uLo,1e-4),0.0,1.0);
+    if(t>0.003){
+      vec3 col = texture(uLut, vec2(t,0.5)).rgb;
+      float a = clamp((t*0.22+t*t)*uGain*dt*60.0,0.0,1.0);
+      acc.rgb += (1.0-acc.a)*a*col;
+      acc.a   += (1.0-acc.a)*a;
+      if(acc.a>0.97)break;
+    }
+    p += step_;
+  }
+  if(acc.a<0.01) discard;
+  gl_FragColor = acc;
+}`;
+function makeLUT(){
+  const w=256,d=new Uint8Array(w*4);
+  for(let i=0;i<w;i++){
+    const c=turbo(i/(w-1));
+    d[i*4]=c[0];d[i*4+1]=c[1];d[i*4+2]=c[2];d[i*4+3]=255;
+  }
+  const t=new THREE.DataTexture(d,w,1,THREE.RGBAFormat);
+  t.needsUpdate=true;
+  return t;
+}
+const volMats=[];
+function makeVolMaterial(tex3d){
+  const m=new THREE.ShaderMaterial({
+    vertexShader:VERT,fragmentShader:FRAG,
+    uniforms:{
+      uData:{value:tex3d},uLut:{value:makeLUT()},
+      uLo:{value:+E('wlo').value/100},uHi:{value:+E('whi').value/100},
+      uGain:{value:+E('gain').value/20},uSteps:{value:+E('steps').value|0},
+      uInvModel:{value:new THREE.Matrix4()},
+    },
+    transparent:true,side:THREE.BackSide,depthWrite:false,
+  });
+  volMats.push(m);
+  return m;
+}
+function tex3D(data,x,y,z){
+  const t=new THREE.DataTexture3D(data,x,y,z);
+  t.format=THREE.RedFormat;t.type=THREE.UnsignedByteType;
+  t.minFilter=t.magFilter=THREE.LinearFilter;
+  t.unpackAlignment=1;t.needsUpdate=true;
+  return t;
+}
+// ── shell drape ─────────────────────────────────────────────────────────
+function shellCanvas(){
+  const mode=E('shell').value;
+  const cw=vol.vx,ch=vol.vy;
+  const field=new Float32Array(cw*ch);
+  if(mode==='maxproj'){
+    for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+      let mx=0;
+      for(let z=0;z<vol.vz;z++){const v=vol.data[z*cw*ch+y*cw+x];if(v>mx)mx=v;}
+      field[y*cw+x]=mx;
+    }
+  }else{
+    const g0=Math.max(0,+E('gA0').value|0), g1=Math.min(nS,Math.max(g0+1,+E('gA1').value|0));
+    const fv=new Float64Array(nP);
+    for(let p=0;p<nP;p++)fv[p]=featAt(p,g0,g1,mode);
+    field.set(paintLat(fv,cw,ch,vol.xmin,vol.ymin,vol.wmm,vol.hmm).f);
+  }
+  const vs=Array.from(field).sort((a,b)=>a-b);
+  const q=t=>vs[Math.min(vs.length-1,Math.floor(vs.length*t/100))];
+  const lo=q(2),hi=q(98);
+  const off=document.createElement('canvas');off.width=cw;off.height=ch;
+  const ictx=off.getContext('2d');
+  const img=ictx.createImageData(cw,ch);
+  for(let y=0;y<ch;y++)for(let x=0;x<cw;x++){
+    const t=Math.max(0,Math.min(1,(field[y*cw+x]-lo)/(hi-lo||1)));
+    const c=turbo2D(t),o=((ch-1-y)*cw+x)*4;      // ← exact 2D-tool colors
+    img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;
+  }
+  ictx.putImageData(img,0,0);
+  const sc=Math.max(2,Math.round(1400/cw));
+  const cv=document.createElement('canvas');cv.width=cw*sc;cv.height=ch*sc;
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(off,0,0,cv.width,cv.height);
+  return cv;
+}
+// ── label sprites + halo ────────────────────────────────────────────────
+function textSprite(lines,color){
+  const pad=10,lh=34,W=460,H=lines.length*lh+pad*2;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='rgba(4,16,28,0.88)';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=color;ctx.lineWidth=3;ctx.strokeRect(1.5,1.5,W-3,H-3);
+  ctx.font='bold 26px monospace';
+  lines.forEach((ln,i)=>{
+    ctx.fillStyle=i===0?color:'#eaf6ff';
+    ctx.fillText(ln,pad,pad+lh*(i+1)-10);
+  });
+  const tex=new THREE.CanvasTexture(cv);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));
+  sp.scale.set(0.14,0.14*H/W,1);
+  return sp;
+}
+function haloSprite(size){
+  const cv=document.createElement('canvas');cv.width=cv.height=128;
+  const ctx=cv.getContext('2d');
+  const g=ctx.createRadialGradient(64,64,4,64,64,62);
+  g.addColorStop(0,'rgba(74,222,128,0.55)');
+  g.addColorStop(0.5,'rgba(74,222,128,0.16)');
+  g.addColorStop(1,'rgba(74,222,128,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,128,128);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cv),blending:THREE.AdditiveBlending,depthTest:false,depthWrite:false}));
+  sp.scale.setScalar(size);
+  return sp;
+}
+// ── main volume mesh ────────────────────────────────────────────────────
+function buildVolumeMesh(){
+  let keepP=null,keepQ=null,keepS=null;
+  if(volGroup){
+    keepP=volGroup.position.clone();keepQ=volGroup.quaternion.clone();keepS=volGroup.scale.clone();
+    scene.remove(volGroup);
+  }
+  volMats.length=0;blobs.length=0;pickables.length=0;
+  E('blobinfo').textContent='no indications detected yet';
+  volGroup=new THREE.Group();
+  volMesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),makeVolMaterial(tex3D(vol.data,vol.vx,vol.vy,vol.vz)));
+  const zs=Math.max(.2,+E('zscale').value||1);
+  const sx=vol.wmm/1000, sy=vol.hmm/1000;
+  const sz=Math.max(0.012,0.018*zs*5);            // slab look: ~10 mm × zscale ×… visual
+  volMesh.scale.set(sx,sy,sz);
+  volMesh.rotation.x=-Math.PI/2;
+  volGroup.add(volMesh);
+  const wire=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1)),
+    new THREE.LineBasicMaterial({color:0x39bdf8,transparent:true,opacity:.55}));
+  wire.scale.copy(volMesh.scale);wire.rotation.copy(volMesh.rotation);
+  volGroup.add(wire);
+  if(E('shell').value!=='off'){
+    shellMesh=new THREE.Mesh(new THREE.PlaneGeometry(sx,sy),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shellCanvas()),side:THREE.DoubleSide}));
+    shellMesh.rotation.x=-Math.PI/2;
+    shellMesh.position.y=sz/2;
+    volGroup.add(shellMesh);
+  }else shellMesh=null;
+  if(keepP){volGroup.position.copy(keepP);volGroup.quaternion.copy(keepQ);volGroup.scale.copy(keepS);}
+  else volGroup.position.set(0,1.1,-0.5);
+  scene.add(volGroup);
+}
+// ── indications ─────────────────────────────────────────────────────────
+const blobs=[];
+const pickables=[];
+function detectBlobs(){
+  if(!vol){alert('Build the volume first');return;}
+  for(const b of blobs)b.group.parent.remove(b.group);
+  blobs.length=0;pickables.length=0;
+  miniBlob=null;if(miniMesh)miniMesh.visible=false;
+  const {vx,vy,vz,data}=vol;
+  const thr=Math.max(Math.round(+E('wlo').value*2.55),96);   // body (32) is never an indication
+  const lab=new Int32Array(vx*vy*vz).fill(-1);
+  const found=[];
+  const stack=new Int32Array(1<<20);
+  for(let z=0;z<vz;z++)for(let y=0;y<vy;y++)for(let x=0;x<vx;x++){
+    const k=z*vx*vy+y*vx+x;
+    if(data[k]<thr||lab[k]>=0)continue;
+    const id=found.length;
+    let sp=0;stack[sp++]=k;lab[k]=id;
+    let cnt=0,x0=vx,x1=0,y0=vy,y1=0,zz0=vz,zz1=0,pk=0;
+    while(sp>0){
+      const kk=stack[--sp];cnt++;
+      const zz=(kk/(vx*vy))|0,yy=((kk%(vx*vy))/vx)|0,xx=kk%vx;
+      if(xx<x0)x0=xx;if(xx>x1)x1=xx;
+      if(yy<y0)y0=yy;if(yy>y1)y1=yy;
+      if(zz<zz0)zz0=zz;if(zz>zz1)zz1=zz;
+      if(data[kk]>pk)pk=data[kk];
+      const cand=[];
+      if(xx>0)cand.push(kk-1);
+      if(xx<vx-1)cand.push(kk+1);
+      if(yy>0)cand.push(kk-vx);
+      if(yy<vy-1)cand.push(kk+vx);
+      if(zz>0)cand.push(kk-vx*vy);
+      if(zz<vz-1)cand.push(kk+vx*vy);
+      for(const nk of cand){
+        if(lab[nk]>=0||data[nk]<thr)continue;
+        lab[nk]=id;
+        if(sp<stack.length)stack[sp++]=nk;
+      }
+    }
+    found.push({cnt,x0,x1,y0,y1,z0:zz0,z1:zz1,pk});
+  }
+  const mmX=vol.wmm/vx, mmY=vol.hmm/vy;
+  const smpPerVox=(vol.z1-vol.z0)/vz;
+  const voxMM3=mmX*mmY*1.0;
+  const minmm3=+E('minmm3').value||40;
+  let cands=found.filter(b=>{
+    if(b.cnt*voxMM3<minmm3||b.cnt<6)return false;
+    return ((b.x1-b.x0+1)*(b.y1-b.y0+1))/(vx*vy)<=0.35;
+  }).sort((a,b)=>b.cnt-a.cnt);
+  const merged=[];
+  for(const b of cands){
+    let host=null;
+    for(const m of merged){
+      const ox=Math.max(0,Math.min(b.x1,m.x1)-Math.max(b.x0,m.x0)+1);
+      const oy=Math.max(0,Math.min(b.y1,m.y1)-Math.max(b.y0,m.y0)+1);
+      if(ox*oy>=0.4*(b.x1-b.x0+1)*(b.y1-b.y0+1)){host=m;break;}
+    }
+    if(host){
+      host.x0=Math.min(host.x0,b.x0);host.x1=Math.max(host.x1,b.x1);
+      host.y0=Math.min(host.y0,b.y0);host.y1=Math.max(host.y1,b.y1);
+      host.z0=Math.min(host.z0,b.z0);host.z1=Math.max(host.z1,b.z1);
+      host.cnt+=b.cnt;host.pk=Math.max(host.pk,b.pk);host.orders=(host.orders||1)+1;
+    }else merged.push(Object.assign({orders:1},b));
+  }
+  cands=merged.slice(0,Math.max(1,+E('maxblobs').value|0));
+  const zs=volMesh.scale.z;
+  let info='';
+  cands.forEach((b,i)=>{
+    const pad=2;
+    const bx0=Math.max(0,b.x0-pad),bx1=Math.min(vx-1,b.x1+pad);
+    const by0=Math.max(0,b.y0-pad),by1=Math.min(vy-1,b.y1+pad);
+    const bz0=Math.max(0,b.z0-pad),bz1=Math.min(vz-1,b.z1+pad);
+    const sxv=bx1-bx0+1,syv=by1-by0+1,szv=bz1-bz0+1;
+    const sub=new Uint8Array(sxv*syv*szv);
+    for(let z=0;z<szv;z++)for(let y=0;y<syv;y++)for(let x=0;x<sxv;x++)
+      sub[z*sxv*syv+y*sxv+x]=data[(z+bz0)*vx*vy+(y+by0)*vx+(x+bx0)];
+    const g=new THREE.Group();
+    const mini=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),makeVolMaterial(tex3D(sub,sxv,syv,szv)));
+    const wsx=sxv*mmX/1000, wsy=syv*mmY/1000, wsz=szv/vz*zs;
+    mini.scale.set(wsx,wsy,wsz);
+    g.add(mini);
+    const box=new THREE.Mesh(new THREE.BoxGeometry(wsx,wsy,wsz),
+      new THREE.MeshBasicMaterial({color:0x4ade80,transparent:true,opacity:0.07,depthWrite:false}));
+    box.userData.blobIndex=i;
+    g.add(box);
+    pickables.push(box);
+    const wire=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(wsx,wsy,wsz)),
+      new THREE.LineBasicMaterial({color:0x4ade80,transparent:true,opacity:.9}));
+    g.add(wire);
+    const halo=haloSprite(Math.max(wsx,wsy)*1.8);
+    g.add(halo);
+    const sizeX=((b.x1-b.x0+1)*mmX).toFixed(1), sizeY=((b.y1-b.y0+1)*mmY).toFixed(1);
+    const s0=Math.round(vol.z0+b.z0*smpPerVox), s1=Math.round(vol.z0+b.z1*smpPerVox);
+    const cxmm=(vol.xmin+(b.x0+b.x1+2)/2*mmX).toFixed(0), cymm=(vol.ymin+(b.y0+b.y1+2)/2*mmY).toFixed(0);
+    const thruMode=E('vmode').value==='through';
+    const label=textSprite([`IND ${i+1} · ${sizeX} × ${sizeY} mm`,
+      thruMode?`at X${cxmm} Y${cymm} · through-thickness`:`at X${cxmm} Y${cymm} · smp ${s0}–${s1} · ${b.orders||1} echo${(b.orders||1)>1?'es':''}`,
+      `peak ${(b.pk/2.55).toFixed(0)} % · vol ${(b.cnt*voxMM3).toFixed(0)} mm³`],'#4ade80');
+    label.position.set(0,0,wsz/2+0.06);
+    label.visible=showLabels;
+    g.add(label);
+    const lx=((bx0+bx1+2)/2/vx-0.5)*volMesh.scale.x;
+    const ly=((by0+by1+2)/2/vy-0.5)*volMesh.scale.y;
+    const lz=((bz0+bz1+2)/2/vz-0.5)*zs;
+    g.position.set(lx, lz, -ly);
+    g.rotation.x=-Math.PI/2;
+    volGroup.add(g);
+    blobs.push({group:g,home:{p:g.position.clone(),q:g.quaternion.clone()},i,wire,halo,box,label,size:Math.max(wsx,wsy,wsz),free:false,spin:false});
+    info+=`IND ${i+1}: ${sizeX}×${sizeY} mm · ${(b.cnt*voxMM3).toFixed(0)} mm³ · peak ${(b.pk/2.55).toFixed(0)}%\n`;
+  });
+  E('blobinfo').textContent=cands.length?info:'nothing above Low% — lower it and re-detect';
+}
+function resetBlobs(){
+  for(const b of blobs){
+    lockBlob(b);
+    b.spin=false;
+    b.group.position.copy(b.home.p);b.group.quaternion.copy(b.home.q);
+    b.group.scale.setScalar(1);
+  }
+  if(miniMesh)miniMesh.visible=false;
+}
+// ── scene, fancy environment, desktop + XR interaction ──────────────────
+let camR=1.4,camTheta=0.5,camPhi=1.15,camTarget=new THREE.Vector3(0,1.1,-0.5);
+function updateCamera(){
+  camPhi=Math.max(.05,Math.min(Math.PI-.05,camPhi));
+  camera.position.set(
+    camTarget.x+camR*Math.sin(camPhi)*Math.sin(camTheta),
+    camTarget.y+camR*Math.cos(camPhi),
+    camTarget.z+camR*Math.sin(camPhi)*Math.cos(camTheta));
+  camera.lookAt(camTarget);
+}
+const grabbers=[];let skyMesh=null,envGrids=[],arPlaceFlag=false;
+function fancyEnv(){
+  // gradient sky dome
+  skyMesh=new THREE.Mesh(new THREE.SphereGeometry(40,24,16),
+    new THREE.ShaderMaterial({
+      side:THREE.BackSide,depthWrite:false,
+      vertexShader:`varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+      fragmentShader:`varying vec3 vP;
+        void main(){
+          float h=normalize(vP).y*0.5+0.5;
+          vec3 a=vec3(0.012,0.03,0.06), b=vec3(0.05,0.12,0.22);
+          gl_FragColor=vec4(mix(a,b,pow(h,1.4)),1.0);
+        }`}));
+  scene.add(skyMesh);
+  // double grid floor
+  const g1=new THREE.GridHelper(8,40,0x1c3a55,0x0f2336);scene.add(g1);
+  const g2=new THREE.GridHelper(8,8,0x2a5a85,0x2a5a85);
+  g2.material.transparent=true;g2.material.opacity=0.35;scene.add(g2);
+  envGrids=[g1,g2];
+}
+function initScene(){
+  renderer=new THREE.WebGLRenderer({canvas:E('view'),antialias:true,alpha:true,preserveDrawingBuffer:true});
+  renderer.xr.enabled=true;
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(50,1,0.01,100);
+  dolly=new THREE.Group();           // player rig: thumbstick locomotion moves this
+  dolly.add(camera);
+  scene.add(dolly);
+  scene.add(new THREE.AmbientLight(0xffffff,.85));
+  const sun=new THREE.DirectionalLight(0xffffff,.7);
+  sun.position.set(1.5,3,1);
+  scene.add(sun);
+  fancyEnv();
+  buildPanel();
+  buildMini();
+  resize();updateCamera();
+  // desktop: orbit + DOUBLE-CLICK carry mode
+  const cv=E('view');let drag=null;
+  const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();
+  let carry=null;        // {g, plane, off}
+  function setNDC(e){
+    const r=cv.getBoundingClientRect();
+    ndc.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+  }
+  cv.addEventListener('dblclick',e=>{
+    setNDC(e);
+    const hits=ray.intersectObjects(pickables,false);
+    if(!hits.length)return;
+    const g=hits[0].object.parent;
+    const b=blobs.find(b=>b.group===g);
+    if(b)detachBlob(b);
+    const planeN=new THREE.Vector3();camera.getWorldDirection(planeN);
+    carry={g,plane:new THREE.Plane().setFromNormalAndCoplanarPoint(planeN,hits[0].point),
+           off:g.parent.worldToLocal(hits[0].point.clone()).sub(g.position)};
+    E('hud').innerHTML='🖐 <b>MOVING IND '+(b?b.i+1:'?')+'</b> — move the mouse, click to drop · ↺ Put back restores';
+  });
+  let rotDrag=null;
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('mousedown',e=>{
+    if(carry){carry=null;E('hud').innerHTML='dropped — double-click another hole to move it';return;}
+    if(e.button===2&&volGroup){
+      rotDrag={x:e.clientX,y:e.clientY,q:volGroup.quaternion.clone()};
+      return;
+    }
+    drag={x:e.clientX,y:e.clientY,th:camTheta,ph:camPhi};
+  });
+  window.addEventListener('mousemove',e=>{
+    if(carry){
+      setNDC(e);
+      const pt=new THREE.Vector3();
+      if(ray.ray.intersectPlane(carry.plane,pt))
+        carry.g.position.copy(carry.g.parent.worldToLocal(pt.clone()).sub(carry.off));
+      return;
+    }
+    if(rotDrag&&volGroup){
+      const qx=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),(e.clientX-rotDrag.x)*0.01);
+      const qy=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),(e.clientY-rotDrag.y)*0.01);
+      volGroup.quaternion.copy(qx.multiply(qy).multiply(rotDrag.q));
+      return;
+    }
+    if(!drag)return;
+    camTheta=drag.th-(e.clientX-drag.x)*0.008;
+    camPhi=drag.ph-(e.clientY-drag.y)*0.008;
+    updateCamera();
+  });
+  window.addEventListener('mouseup',()=>{drag=null;rotDrag=null;});
+  cv.addEventListener('wheel',e=>{
+    e.preventDefault();
+    if(carry){            // spin the hole you are carrying
+      const axis=e.shiftKey?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0);
+      const q=new THREE.Quaternion().setFromAxisAngle(axis,e.deltaY>0?0.18:-0.18);
+      carry.g.quaternion.premultiply(q);
+      return;
+    }
+    camR*=e.deltaY>0?1.1:0.91;camR=Math.max(.2,Math.min(8,camR));updateCamera();
+  },{passive:false});
+  window.addEventListener('resize',resize);
+  // XR controllers with lasers
+  for(let i=0;i<2;i++){
+    const c=renderer.xr.getController(i);
+    c.userData.trigger=false;c.userData.grip=false;
+    c.addEventListener('connected',e=>{c.userData.inputSource=e.data;});
+    c.addEventListener('selectstart',()=>{if(miniClick(c)||panelClick(c))return;c.userData.trigger=true;onGrabChange();});
+    c.addEventListener('selectend',()=>{c.userData.trigger=false;onGrabChange();});
+    c.addEventListener('squeezestart',()=>{if(panelGrabStart(c))return;c.userData.grip=true;onGrabChange();});
+    c.addEventListener('squeezeend',()=>{panelGrabEnd(c);c.userData.grip=false;onGrabChange();});
+    const tip=new THREE.Mesh(new THREE.SphereGeometry(0.011,12,8),
+      new THREE.MeshBasicMaterial({color:0xff7a1a}));
+    c.add(tip);
+    const laserGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0),new THREE.Vector3(0,0,-1.2)]);
+    const laser=new THREE.Line(laserGeo,new THREE.LineBasicMaterial({color:0x39bdf8,transparent:true,opacity:.6}));
+    c.add(laser);
+    c.userData.laser=laser;
+    dolly.add(c);
+    grabbers.push(c);
+  }
+  // bare-hand tracking (Quest): pinch = grab — defensive, optional
+  if(renderer.xr.getHand){
+    try{
+      for(let i=0;i<2;i++){
+        const h=renderer.xr.getHand(i);
+        h.userData.trigger=false;h.userData.isHand=true;
+        dolly.add(h);
+        grabbers.push(h);
+      }
+    }catch(e){}
+  }
+  renderer.setAnimationLoop(tick);
+  if(navigator.xr){
+    navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok)E('btnVR').style.display='block';});
+    navigator.xr.isSessionSupported('immersive-ar').then(ok=>{if(ok)E('btnAR').style.display='block';});
+  }
+  E('btnVR').addEventListener('click',()=>startXR('immersive-vr'));
+  E('btnAR').addEventListener('click',()=>startXR('immersive-ar'));
+}
+let xrSession=null;
+async function startXR(mode){
+  if(xrSession){xrSession.end();return;}
+  try{
+    xrSession=await navigator.xr.requestSession(mode,{optionalFeatures:['local-floor','bounded-floor','hand-tracking']});
+    xrSession.addEventListener('end',()=>{
+      xrSession=null;
+      if(skyMesh)skyMesh.visible=true;
+      for(const g of envGrids)g.visible=true;
+      if(panelMesh)panelMesh.visible=false;
+    });
+    if(mode==='immersive-ar'){
+      if(skyMesh)skyMesh.visible=false;                // passthrough: your room
+      for(const g of envGrids)g.visible=false;         // no virtual floor grid
+    }
+    await renderer.xr.setSession(xrSession);
+    placePanel();
+    // HoloLens: the display is see-through but Edge only offers "VR" sessions —
+    // it reports a non-opaque blend mode, so treat that as AR automatically.
+    const seeThrough=mode==='immersive-ar'||
+      (xrSession.environmentBlendMode&&xrSession.environmentBlendMode!=='opaque');
+    if(seeThrough){
+      if(skyMesh)skyMesh.visible=false;
+      for(const g of envGrids)g.visible=false;
+      arPlaceFlag=true;
+    }
+  }catch(e){alert('XR failed: '+e.message+'\n(standalone Quest browser needs https — use Quest Link + desktop Chrome)');}
+}
+// VR grab: laser/proximity pick of indications, else whole volume
+let grabState=null;
+// grab rule: a hole is yours if your hand is NEAR it, or your laser is
+// aimed RIGHT AT its green box (like the original file) — anything else
+// always grabs the whole part, so the big part never stops moving.
+const pickRay=new THREE.Raycaster();
+function grabTargetFor(c){
+  if(blobs.length){
+    const cp=c.getWorldPosition(new THREE.Vector3());
+    const gs=volGroup?volGroup.getWorldScale(new THREE.Vector3()).x:1;
+    let best=null,bd=1e9;
+    for(const b of blobs){
+      const bp=b.group.getWorldPosition(new THREE.Vector3());
+      const r=(b.size||0.04)*0.75*gs+0.06;
+      const d=cp.distanceTo(bp);
+      if(d<r&&d<bd){best=b;bd=d;}
+    }
+    if(best)return{target:best.group,blob:best};
+    const cd=new THREE.Vector3(0,0,-1).applyQuaternion(c.getWorldQuaternion(new THREE.Quaternion()));
+    pickRay.set(cp,cd);pickRay.far=1.3;
+    const hits=pickRay.intersectObjects(pickables,false);
+    if(hits.length){
+      const g=hits[0].object.parent;
+      const b=blobs.find(b=>b.group===g);
+      if(b)return{target:b.group,blob:b};
+    }
+  }
+  return{target:volGroup,blob:null};
+}
+function pulse(c,amp,ms){
+  try{
+    const gp=c.userData.inputSource&&c.userData.inputSource.gamepad;
+    if(gp&&gp.hapticActuators&&gp.hapticActuators[0])gp.hapticActuators[0].pulse(amp,ms);
+  }catch(e){}
+}
+function onGrabChange(){
+  if(!volGroup){grabState=null;return;}
+  const held=grabbers.filter(c=>c.userData.trigger);
+  const gripped=grabbers.filter(c=>c.userData.grip&&!c.userData.holdingPanel);
+  if(held.length===1){
+    const c=held[0];
+    const gt=grabTargetFor(c);
+    const nb=gt.blob,target=gt.target;
+    if(nb){detachBlob(nb);openMini(nb);}
+    target.updateMatrix();
+    grabState={mode:'one',ctrl:c,target,spinQ:new THREE.Quaternion(),
+      invStart:new THREE.Matrix4().copy(c.matrixWorld).invert(),
+      groupStart:target.matrix.clone()};
+    pulse(c,nb?0.7:0.3,nb?90:50);
+  }else if(held.length===2){
+    const p1=held[0].getWorldPosition(new THREE.Vector3());
+    const p2=held[1].getWorldPosition(new THREE.Vector3());
+    // already holding an IND with one hand? then both hands stretch THAT IND
+    const tgt=(grabState&&grabState.mode==='one'&&grabState.target&&grabState.target!==volGroup)?grabState.target:volGroup;
+    grabState={mode:'two',h:[held[0],held[1]],tgt,
+      m0:p1.clone().add(p2).multiplyScalar(0.5),
+      v0:p2.clone().sub(p1),
+      s0:tgt.scale.x,
+      q0:tgt.quaternion.clone(),
+      p0:tgt.position.clone()};
+  }else if(gripped.length){
+    // grip = pivot the part in place around its own centre
+    const c=gripped[0];
+    grabState={mode:'rot',ctrl:c,
+      cq0:c.getWorldQuaternion(new THREE.Quaternion()).invert(),
+      gq0:volGroup.quaternion.clone()};
+    pulse(c,0.5,70);
+  }else grabState=null;
+  for(const c of held)pulse(c,0.4,60);
+}
+// ── in-VR control panel ─────────────────────────────────────────────────
+const PW=560,PH=1048,PMW=0.40,PMH=PH/PW*0.40;
+let panelMesh=null,panelCtx=null,panelTex=null,panelHover=-1,panelButtons=[];
+function clampSet(id,delta,lo,hi){
+  E(id).value=Math.max(lo,Math.min(hi,(+E(id).value||0)+delta));
+}
+function cyc(id,opts,after){
+  const i=opts.indexOf(String(E(id).value));
+  E(id).value=opts[(i+1)%opts.length];
+  after();
+}
+function defineButtons(){
+  const vmN=()=>({through:'HOLES',raw:'ECHO',blend:'BLEND'}[E('vmode').value]||'?');
+  const stN=()=>({128:'FAST',256:'GOOD',384:'HIGH'}[+E('steps').value]||'GOOD');
+  const row=i=>70+i*88;
+  const reG=()=>{if(nP)rebuild();};
+  panelButtons=[
+    {x:20,y:row(0),w:520,h:70,label:()=>'MODE · '+vmN(),act:()=>cyc('vmode',['through','raw','blend'],reG)},
+    {x:20,y:row(1),w:520,h:70,label:()=>'SHELL · '+E('shell').value.toUpperCase(),act:()=>cyc('shell',['maxproj','peak','p2p','energy','tof','decay','off'],updateShell)},
+    {x:20,y:row(2),w:253,h:70,label:()=>'GATE A − ('+E('gA0').value+')',act:()=>{clampSet('gA0',-1,0,99999);reG();}},
+    {x:287,y:row(2),w:253,h:70,label:()=>'GATE A +',act:()=>{clampSet('gA0',1,0,99999);reG();}},
+    {x:20,y:row(3),w:253,h:70,label:()=>'GATE B − ('+E('gA1').value+')',act:()=>{clampSet('gA1',-1,1,99999);reG();}},
+    {x:287,y:row(3),w:253,h:70,label:()=>'GATE B +',act:()=>{clampSet('gA1',1,1,99999);reG();}},
+    {x:20,y:row(4),w:253,h:70,label:()=>'GAIN − ('+E('gain').value+')',act:()=>{clampSet('gain',-8,1,100);applyUniforms();}},
+    {x:287,y:row(4),w:253,h:70,label:()=>'GAIN +',act:()=>{clampSet('gain',8,1,100);applyUniforms();}},
+    {x:20,y:row(5),w:253,h:70,label:()=>'LOW − ('+E('wlo').value+'%)',act:()=>{clampSet('wlo',-4,0,100);applyUniforms();}},
+    {x:287,y:row(5),w:253,h:70,label:()=>'LOW +',act:()=>{clampSet('wlo',4,0,100);applyUniforms();}},
+    {x:20,y:row(6),w:253,h:70,label:()=>'HIGH − ('+E('whi').value+'%)',act:()=>{clampSet('whi',-4,0,100);applyUniforms();}},
+    {x:287,y:row(6),w:253,h:70,label:()=>'HIGH +',act:()=>{clampSet('whi',4,0,100);applyUniforms();}},
+    {x:20,y:row(7),w:520,h:70,label:()=>'QUALITY · '+stN(),act:()=>cyc('steps',['128','256','384'],applyUniforms)},
+    {x:20,y:row(8),w:253,h:70,label:()=>'◎ DETECT',act:()=>{if(nP)detectBlobs();}},
+    {x:287,y:row(8),w:253,h:70,label:()=>'↺ PUT BACK',act:()=>resetBlobs()},
+    {x:20,y:row(9),w:253,h:70,label:()=>'⟲ RESET PART',act:()=>resetPart()},
+    {x:287,y:row(9),w:253,h:70,label:()=>'⊕ BRING TO ME',act:()=>bringToMe()},
+    {x:20,y:row(10),w:520,h:70,label:()=>'ⓘ IND INFO · '+(showLabels?'ON':'OFF'),act:()=>toggleLabels()},
+  ];
+}
+function drawPanel(){
+  if(!panelCtx)return;
+  const ctx=panelCtx;
+  ctx.clearRect(0,0,PW,PH);
+  ctx.fillStyle='rgba(4,16,28,0.92)';ctx.fillRect(0,0,PW,PH);
+  ctx.strokeStyle='#39bdf8';ctx.lineWidth=4;ctx.strokeRect(2,2,PW-4,PH-4);
+  ctx.fillStyle='#8fb7d4';ctx.font='bold 22px monospace';
+  ctx.fillText('SANSI LAB · LIU-SAADI — grip drags panel',22,42);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  panelButtons.forEach((b,i)=>{
+    ctx.fillStyle=i===panelHover?'#1d5a8a':'#113554';
+    ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.strokeStyle=i===panelHover?'#39bdf8':'#2d5574';ctx.lineWidth=3;
+    ctx.strokeRect(b.x,b.y,b.w,b.h);
+    ctx.fillStyle='#eaf6ff';ctx.font='bold 26px monospace';
+    ctx.fillText(b.label(),b.x+b.w/2,b.y+b.h/2+1);
+  });
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  panelTex.needsUpdate=true;
+}
+function buildPanel(){
+  const cv=document.createElement('canvas');cv.width=PW;cv.height=PH;
+  panelCtx=cv.getContext('2d');
+  panelTex=new THREE.CanvasTexture(cv);
+  panelMesh=new THREE.Mesh(new THREE.PlaneGeometry(PMW,PMH),
+    new THREE.MeshBasicMaterial({map:panelTex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+  panelMesh.visible=false;
+  scene.add(panelMesh);
+  defineButtons();drawPanel();
+}
+function placePanel(){
+  if(!panelMesh)return;
+  panelMesh.visible=true;
+  panelMesh.position.set(-0.55,1.30,-0.30);
+  panelMesh.lookAt(0,1.55,0.45);
+  drawPanel();
+}
+const pRay=new THREE.Raycaster();
+function panelHitFromCtrl(c){
+  if(!panelMesh||!panelMesh.visible||c.userData.isHand)return null;
+  const o=c.getWorldPosition(new THREE.Vector3());
+  const d=new THREE.Vector3(0,0,-1).applyQuaternion(c.getWorldQuaternion(new THREE.Quaternion()));
+  pRay.set(o,d);pRay.far=3;
+  const h=pRay.intersectObject(panelMesh,false);
+  return h.length?h[0]:null;
+}
+function uvToButton(uv){
+  const x=uv.x*PW,y=(1-uv.y)*PH;
+  for(let i=0;i<panelButtons.length;i++){
+    const b=panelButtons[i];
+    if(x>=b.x&&x<=b.x+b.w&&y>=b.y&&y<=b.y+b.h)return i;
+  }
+  return -1;
+}
+function panelClick(c){
+  const h=panelHitFromCtrl(c);
+  if(!h)return false;
+  const i=uvToButton(h.uv);
+  if(i<0)return false;            // missed the buttons — let the grab happen
+  try{panelButtons[i].act();}catch(e){}
+  pulse(c,0.55,45);drawPanel();
+  return true;
+}
+function panelGrabStart(c){
+  const h=panelHitFromCtrl(c);
+  if(!h)return false;
+  c.attach(panelMesh);c.userData.holdingPanel=true;pulse(c,0.4,60);
+  return true;
+}
+function panelGrabEnd(c){
+  if(c.userData.holdingPanel){scene.attach(panelMesh);c.userData.holdingPanel=false;}
+}
+function panelHoverUpdate(){
+  if(!panelMesh||!panelMesh.visible)return;
+  let hov=-1;
+  for(const c of grabbers){
+    if(c.userData.isHand)continue;
+    const h=panelHitFromCtrl(c);
+    if(c.userData.laser)c.userData.laser.scale.z=h?h.distance/1.2:1;
+    if(h){const i=uvToButton(h.uv);if(i>=0)hov=i;}
+  }
+  if(hov!==panelHover){panelHover=hov;drawPanel();}
+}
+function handPoke(h,t){
+  if(!panelMesh||!panelMesh.visible)return;
+  const tip=h.joints&&h.joints['index-finger-tip'];
+  if(!tip)return;
+  const lp=panelMesh.worldToLocal(tip.getWorldPosition(new THREE.Vector3()));
+  if(Math.abs(lp.z)>0.03||Math.abs(lp.x)>PMW/2||Math.abs(lp.y)>PMH/2)return;
+  if(t-(h.userData.lastPoke||0)<0.6)return;
+  const i=uvToButton({x:lp.x/PMW+0.5,y:lp.y/PMH+0.5});
+  if(i>=0){h.userData.lastPoke=t;try{panelButtons[i].act();}catch(e){}drawPanel();}
+}
+// ── visible hand joints (Quest hand tracking) ───────────────────────────
+const jointGeo=new THREE.SphereGeometry(1,8,6);
+const jointMat=new THREE.MeshBasicMaterial({color:0x39bdf8});
+const tipMat=new THREE.MeshBasicMaterial({color:0xff7a1a});
+function updateHandVis(h){
+  if(!h.userData.vis)h.userData.vis={};
+  for(const name in h.joints){
+    const j=h.joints[name];
+    if(!j)continue;
+    let sph=h.userData.vis[name];
+    if(!sph){
+      sph=new THREE.Mesh(jointGeo,/tip$/.test(name)?tipMat:jointMat);
+      h.add(sph);h.userData.vis[name]=sph;
+    }
+    sph.visible=j.visible!==false;
+    sph.position.copy(j.position);
+    sph.scale.setScalar(Math.max(0.004,j.jointRadius||0.008));
+  }
+}
+// ── break-away indications + per-IND mini menu ──────────────────────────
+let showLabels=false;
+function toggleLabels(){
+  showLabels=!showLabels;
+  for(const b of blobs)if(b.label)b.label.visible=showLabels;
+}
+function detachBlob(b){
+  if(b.group.parent===volGroup)scene.attach(b.group);
+  b.free=true;
+}
+function lockBlob(b){
+  if(b.group.parent!==volGroup&&volGroup)volGroup.attach(b.group);
+  b.free=false;
+}
+const MWc=300,MHc=470;
+let miniMesh=null,miniCtx=null,miniTex=null,miniBlob=null,miniButtons=[];
+function defineMini(){
+  const r=i=>54+i*80;
+  miniButtons=[
+    {y:r(0),label:()=>miniBlob&&miniBlob.spin?'⟳ SPIN · ON':'⟳ SPIN · OFF',act:()=>{if(miniBlob)miniBlob.spin=!miniBlob.spin;}},
+    {y:r(1),label:()=>miniBlob&&miniBlob.label&&miniBlob.label.visible?'ⓘ INFO · ON':'ⓘ INFO · OFF',act:()=>{if(miniBlob&&miniBlob.label)miniBlob.label.visible=!miniBlob.label.visible;}},
+    {y:r(2),label:()=>miniBlob&&!miniBlob.free?'⤒ SET FREE':'⤓ LOCK TO PART',act:()=>{if(miniBlob)miniBlob.free?lockBlob(miniBlob):detachBlob(miniBlob);}},
+    {y:r(3),label:()=>'↺ HOME',act:()=>{if(miniBlob){lockBlob(miniBlob);miniBlob.spin=false;miniBlob.group.position.copy(miniBlob.home.p);miniBlob.group.quaternion.copy(miniBlob.home.q);}miniMesh.visible=false;}},
+    {y:r(4),label:()=>'✕ CLOSE',act:()=>{miniMesh.visible=false;}},
+  ];
+}
+function drawMini(){
+  if(!miniCtx)return;
+  const ctx=miniCtx;
+  ctx.clearRect(0,0,MWc,MHc);
+  ctx.fillStyle='rgba(4,16,28,0.93)';ctx.fillRect(0,0,MWc,MHc);
+  ctx.strokeStyle='#4ade80';ctx.lineWidth=4;ctx.strokeRect(2,2,MWc-4,MHc-4);
+  ctx.fillStyle='#4ade80';ctx.font='bold 26px monospace';ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  ctx.fillText('IND '+(miniBlob?miniBlob.i+1:'?')+(miniBlob&&miniBlob.free?' · FREE':' · LOCKED'),16,36);
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='bold 22px monospace';
+  miniButtons.forEach(b=>{
+    ctx.fillStyle='#113554';ctx.fillRect(14,b.y,MWc-28,64);
+    ctx.strokeStyle='#2d5574';ctx.lineWidth=3;ctx.strokeRect(14,b.y,MWc-28,64);
+    ctx.fillStyle='#eaf6ff';ctx.fillText(b.label(),MWc/2,b.y+33);
+  });
+  ctx.textAlign='left';ctx.textBaseline='alphabetic';
+  miniTex.needsUpdate=true;
+}
+function buildMini(){
+  const cv=document.createElement('canvas');cv.width=MWc;cv.height=MHc;
+  miniCtx=cv.getContext('2d');
+  miniTex=new THREE.CanvasTexture(cv);
+  miniMesh=new THREE.Mesh(new THREE.PlaneGeometry(0.17,0.17*MHc/MWc),
+    new THREE.MeshBasicMaterial({map:miniTex,transparent:true,side:THREE.DoubleSide,depthTest:false,depthWrite:false}));
+  miniMesh.renderOrder=999;
+  miniMesh.visible=false;
+  scene.add(miniMesh);
+  defineMini();drawMini();
+}
+function openMini(b){
+  miniBlob=b;
+  if(miniMesh){miniMesh.visible=true;drawMini();}
+}
+function miniClick(c){
+  if(!miniMesh||!miniMesh.visible||c.userData.isHand)return false;
+  const o=c.getWorldPosition(new THREE.Vector3());
+  const d=new THREE.Vector3(0,0,-1).applyQuaternion(c.getWorldQuaternion(new THREE.Quaternion()));
+  pRay.set(o,d);pRay.far=3;
+  const h=pRay.intersectObject(miniMesh,false);
+  if(!h.length)return false;
+  const x=h[0].uv.x*MWc,y=(1-h[0].uv.y)*MHc;
+  for(const b of miniButtons){
+    if(x>=14&&x<=MWc-14&&y>=b.y&&y<=b.y+64){
+      try{b.act();}catch(e){}
+      pulse(c,0.5,40);drawMini();
+      return true;
+    }
+  }
+  return false;  // background — let the grab pass through, stays smooth
+}
+function updateMini(){
+  if(!miniMesh||!miniMesh.visible||!miniBlob)return;
+  const bp=miniBlob.group.getWorldPosition(new THREE.Vector3());
+  const cam=renderer.xr.isPresenting?renderer.xr.getCamera(camera):camera;
+  const cp=cam.getWorldPosition(new THREE.Vector3());
+  const toB=bp.clone().sub(cp);
+  if(toB.lengthSq()<1e-6)return;
+  const side=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),toB).normalize();
+  miniMesh.position.copy(bp).add(side.multiplyScalar(0.22)).add(new THREE.Vector3(0,0.045,0));
+  miniMesh.lookAt(cp);
+}
+// ── walk / snap turn / zoom + reset/bring ───────────────────────────────
+function resetPart(){
+  if(!volGroup)return;
+  volGroup.position.set(0,1.1,-0.5);
+  volGroup.quaternion.set(0,0,0,1);
+  volGroup.scale.setScalar(1);
+  resetBlobs();
+}
+function bringToMe(){
+  if(!volGroup)return;
+  const cam=renderer.xr.isPresenting?renderer.xr.getCamera(camera):camera;
+  const hp=cam.getWorldPosition(new THREE.Vector3());
+  const hd=cam.getWorldDirection(new THREE.Vector3());hd.y=0;
+  if(hd.lengthSq()<1e-6)hd.set(0,0,-1);hd.normalize();
+  volGroup.position.copy(hp.clone().add(hd.multiplyScalar(0.65)));
+  volGroup.position.y=hp.y-0.1;
+}
+function thumbsticks(dt){
+  if(!renderer.xr.isPresenting||!dolly)return;
+  const xrCam=renderer.xr.getCamera(camera);
+  const head=xrCam.getWorldPosition(new THREE.Vector3());
+  const fwd=xrCam.getWorldDirection(new THREE.Vector3());fwd.y=0;
+  if(fwd.lengthSq()<1e-6)fwd.set(0,0,-1);fwd.normalize();
+  const right=new THREE.Vector3(-fwd.z,0,fwd.x);
+  for(const c of grabbers){
+    const src=c.userData.inputSource;
+    if(!src||!src.gamepad||src.hand)continue;
+    const ax=src.gamepad.axes||[];
+    const x=Math.abs(ax[2]||0)>0.2?ax[2]:0;
+    const y=Math.abs(ax[3]||0)>0.2?ax[3]:0;
+    const bt=src.gamepad.buttons||[];
+    if(bt[3]&&bt[3].pressed&&!c.userData.b3){recenter();pulse(c,0.6,80);}
+    c.userData.b3=!!(bt[3]&&bt[3].pressed);
+    if(src.handedness==='left'){
+      // Horizon-style walk: push the stick where you want to go
+      dolly.position.add(fwd.clone().multiplyScalar(-y*2.0*dt));
+      dolly.position.add(right.clone().multiplyScalar(x*2.0*dt));
+    }else{
+      const carry=grabState&&grabState.mode==='one'&&grabState.spinQ;
+      if(carry){
+        // carrying an indication: right stick spins it in your hand
+        if(x)grabState.spinQ.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-x*3.0*dt));
+        if(y)grabState.spinQ.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),y*3.0*dt));
+        c.userData.snap=false;
+        continue;
+      }
+      // snap turn 30° — hysteresis so Quest 2 stick drift can't jam it
+      const sx=ax[2]||0;
+      if(Math.abs(sx)>0.55&&!c.userData.snap){
+        const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),sx>0?-Math.PI/6:Math.PI/6);
+        const rel=dolly.position.clone().sub(head).applyQuaternion(q);
+        dolly.position.copy(head.clone().add(rel));
+        dolly.quaternion.premultiply(q);
+        c.userData.snap=true;pulse(c,0.3,40);
+      }
+      if(Math.abs(sx)<0.3)c.userData.snap=false;
+      if(y&&volGroup){
+        const dir=volGroup.position.clone().sub(head);
+        const d0=dir.length();
+        if(d0>1e-3){
+          dir.normalize();
+          const step=-y*1.8*dt;                 // stick forward = zoom in
+          dolly.position.add(dir.multiplyScalar(Math.min(step,Math.max(0,d0-0.35))));
+        }
+      }
+    }
+  }
+  dolly.position.y=Math.max(-1.0,Math.min(3.0,dolly.position.y));
+}
+function recenter(){
+  resetPart();
+  if(dolly){dolly.position.set(0,0,0);dolly.quaternion.set(0,0,0,1);}
+}
+let tPrev=0;
+function tick(time){
+  const t=time*0.001;
+  const dt=Math.min(0.05,Math.max(0.001,(time-(tPrev||time))*0.001));tPrev=time;
+  // AR: once tracking is live, park the part + menu comfortably in your room
+  if(arPlaceFlag&&renderer.xr.isPresenting){
+    const cam=renderer.xr.getCamera(camera);
+    const hp=cam.getWorldPosition(new THREE.Vector3());
+    if(hp.lengthSq()>1e-4){
+      const hd=cam.getWorldDirection(new THREE.Vector3());hd.y=0;
+      if(hd.lengthSq()<1e-6)hd.set(0,0,-1);hd.normalize();
+      if(volGroup){
+        volGroup.position.copy(hp.clone().add(hd.clone().multiplyScalar(0.8)));
+        volGroup.position.y=hp.y-0.15;
+      }
+      if(panelMesh){
+        const left=new THREE.Vector3(hd.z,0,-hd.x);
+        panelMesh.position.copy(hp.clone().add(hd.clone().multiplyScalar(0.55)).add(left.multiplyScalar(0.55)));
+        panelMesh.position.y=hp.y-0.05;
+        panelMesh.lookAt(hp);
+      }
+      arPlaceFlag=false;
+    }
+  }
+  // hand-tracking pinch → grab + visible joints + finger-poke on the menu
+  for(const g of grabbers){
+    if(!g.userData.isHand)continue;
+    const j=g.joints;
+    if(!j||!j['index-finger-tip']||!j['thumb-tip'])continue;
+    updateHandVis(g);
+    const d=j['index-finger-tip'].position.distanceTo(j['thumb-tip'].position);
+    const pinch=d>0&&d<0.025;
+    if(pinch!==!!g.userData.trigger){g.userData.trigger=pinch;onGrabChange();}
+    handPoke(g,t);
+  }
+  thumbsticks(dt);
+  panelHoverUpdate();
+  updateMini();
+  // animated pulse on indication wires + halos
+  for(const b of blobs){
+    const pulse=0.55+0.45*Math.sin(t*2.2+b.i*1.1);
+    if(b.wire)b.wire.material.opacity=0.45+0.5*pulse;
+    if(b.halo)b.halo.material.opacity=0.35+0.45*pulse;
+    if(b.spin&&(!grabState||grabState.target!==b.group))
+      b.group.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),0.9*dt));
+  }
+  if(grabState&&volGroup){
+    if(grabState.mode==='rot'){
+      const cq=grabState.ctrl.getWorldQuaternion(new THREE.Quaternion());
+      volGroup.quaternion.copy(cq.multiply(grabState.cq0).multiply(grabState.gq0));
+    }else if(grabState.mode==='one'){
+      const tg=grabState.target||volGroup;
+      const delta=new THREE.Matrix4().multiplyMatrices(grabState.ctrl.matrixWorld,grabState.invStart);
+      if(tg===volGroup){
+        const m=new THREE.Matrix4().multiplyMatrices(delta,grabState.groupStart);
+        m.decompose(tg.position,tg.quaternion,new THREE.Vector3());
+        if(grabState.spinQ)tg.quaternion.multiply(grabState.spinQ);
+      }else{
+        const pw=tg.parent.matrixWorld;
+        const m=new THREE.Matrix4().copy(pw).invert().multiply(delta).multiply(pw).multiply(grabState.groupStart);
+        m.decompose(tg.position,tg.quaternion,new THREE.Vector3());
+        if(grabState.spinQ)tg.quaternion.multiply(grabState.spinQ);
+      }
+    }else{
+      // two-handed natural manipulation: move + turn + stretch together
+      const p1=grabState.h[0].getWorldPosition(new THREE.Vector3());
+      const p2=grabState.h[1].getWorldPosition(new THREE.Vector3());
+      const m1=p1.clone().add(p2).multiplyScalar(0.5);
+      const v1=p2.clone().sub(p1);
+      const ratio=v1.length()/Math.max(1e-4,grabState.v0.length());
+      const s=Math.max(.2,Math.min(12,grabState.s0*ratio));
+      const qd=new THREE.Quaternion().setFromUnitVectors(
+        grabState.v0.clone().normalize(),v1.clone().normalize());
+      const tg2=grabState.tgt||volGroup;
+      tg2.scale.setScalar(s);
+      tg2.quaternion.copy(qd.clone().multiply(grabState.q0));
+      const rel=grabState.p0.clone().sub(grabState.m0)
+        .applyQuaternion(qd).multiplyScalar(s/grabState.s0);
+      tg2.position.copy(m1.clone().add(rel));
+    }
+  }
+  scene.traverse(o=>{
+    if(o.isMesh&&o.material&&o.material.uniforms&&o.material.uniforms.uInvModel)
+      o.material.uniforms.uInvModel.value.copy(o.matrixWorld).invert();
+  });
+  renderer.render(scene,camera);
+}
+function resize(){
+  const r=E('view').parentElement.getBoundingClientRect();
+  renderer.setSize(r.width,r.height,false);
+  renderer.setPixelRatio(window.devicePixelRatio||1);
+  camera.aspect=r.width/r.height;
+  camera.updateProjectionMatrix();
+}
+// ── rebuild + wiring ────────────────────────────────────────────────────
+function rebuild(){
+  if(!nP){alert('Load a CSV first');return;}
+  buildVolume();
+  buildVolumeMesh();
+  detectBlobs();
+  const vm=E('vmode').value;
+  E('hud').innerHTML=`<b>${vm==='through'?'through-thickness (gate '+E('gA0').value+'–'+E('gA1').value+')':vm}</b> · ${vol.vx}×${vol.vy}×${vol.vz} voxels · part <b>${vol.wmm.toFixed(0)}×${vol.hmm.toFixed(0)} mm</b> · double-click a hole to move it`;
+  E('stats').textContent=`dwell points: ${nP}\nsamples/frame: ${nS}\nvoxels: ${vol.vx}×${vol.vy}×${vol.vz}\nmode: ${vm}`;
+}
+function applyUniforms(){
+  for(const m of volMats){
+    m.uniforms.uLo.value=+E('wlo').value/100;
+    m.uniforms.uHi.value=+E('whi').value/100;
+    m.uniforms.uGain.value=+E('gain').value/20;
+    m.uniforms.uSteps.value=+E('steps').value|0;
+  }
+}
+for(const id of ['wlo','whi','gain','steps'])
+  E(id).addEventListener('input',applyUniforms);
+for(const id of ['z0','z1','zscale','vmode','gA0','gA1','fpx','fpy','res'])
+  E(id).addEventListener('change',()=>{if(nP)rebuild();});
+function updateShell(){
+  if(!nP||!volGroup)return;
+  if(shellMesh){volGroup.remove(shellMesh);shellMesh=null;}
+  if(E('shell').value!=='off'){
+    shellMesh=new THREE.Mesh(new THREE.PlaneGeometry(volMesh.scale.x,volMesh.scale.y),
+      new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(shellCanvas()),side:THREE.DoubleSide}));
+    shellMesh.rotation.x=-Math.PI/2;
+    shellMesh.position.y=volMesh.scale.z/2;
+    volGroup.add(shellMesh);
+  }
+}
+E('shell').addEventListener('change',updateShell);
+E('file').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  E('stats').textContent='parsing…';
+  try{
+    parseCSV(await f.text());
+    rebuild();
+  }catch(err){E('stats').textContent='ERROR: '+err.message;alert(err.message);}
+});
+initScene();
+</script>
+</body>
+</html>
